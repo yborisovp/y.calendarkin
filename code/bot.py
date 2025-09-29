@@ -1,7 +1,8 @@
 import logging, config, sql, asyncio, wget, os
 
-from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import ParseMode
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.enums import ParseMode
+from aiogram.filters import Command, or_f
 
 from datetime import datetime, time
 from script import text_ical, message_form, dt_now, delta_time
@@ -10,7 +11,7 @@ from script import text_ical, message_form, dt_now, delta_time
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=config.TOKEN)
-dp = Dispatcher(bot)
+dp = Dispatcher()
 
 # инициализируем соединение с БД
 du = sql.Users('../db/users.db')
@@ -18,17 +19,16 @@ dc = sql.Clock('../db/clock.db')
 
 
 # ПРИВЕТСТВЕННОЕ СООБЩЕНИЕ
-@dp.message_handler(commands=['start', 'help'])
+@dp.message(or_f(Command('start'), Command('help')))
 async def helps(message: types.Message):
     tg_id = int(message.chat.id)
     if not du.user_exists(tg_id):
         du.add_user(tg_id)
 
-    buttons = [types.InlineKeyboardButton(text="КОМАНДЫ", callback_data="com"),
-               types.InlineKeyboardButton(text="АВТОР", callback_data="auth")]
-
-    keyboard = types.InlineKeyboardMarkup(row_width=2)
-    keyboard.add(*buttons)
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(text="КОМАНДЫ", callback_data="com"),
+         types.InlineKeyboardButton(text="АВТОР", callback_data="auth")]
+    ])
 
     await message.answer(text="<b>Я.Календаркин</b> - бот для оповещения о событиях из <b>Яндекс.Календаря</b>. "
                               "Для начала работы вам нужно всего лишь прислать в чат ссылку экспорта календаря в "
@@ -38,7 +38,7 @@ async def helps(message: types.Message):
                          parse_mode=ParseMode.HTML, reply_markup=keyboard)
 
 
-@dp.callback_query_handler(text="auth")
+@dp.callback_query(F.data == "auth")
 async def author(call: types.CallbackQuery):
     await call.message.answer(text='*| АВТОР |*\n\n*>>* Этот бот не коммерческий проект, для упрощенного получения '
                                    'уведомлений о событиях в Яндекс.Календаре. Не многим этот бот будет полезен, но '
@@ -48,7 +48,7 @@ async def author(call: types.CallbackQuery):
                               parse_mode=ParseMode.MARKDOWN)
 
 
-@dp.callback_query_handler(text="com")
+@dp.callback_query(F.data == "com")
 async def commands(call: types.CallbackQuery):
     await call.message.answer(text='<b>| КОМАНДЫ |</b>\n\n'
                                    '<b>/help</b> - вспомогательная функция для уточнения работы команд\n'
@@ -59,11 +59,11 @@ async def commands(call: types.CallbackQuery):
                                    '<b>/get_alarm</b> - информация о времени на которое настроены оповещения\n'
                                    '<b>/edit_alarm</b> - изменение времени оповещений\n'
                                    '<b>/stop_alarm</b> - команда, отключающая второе оповещение о событии',
-                              parse_mode=types.ParseMode.HTML)
+                              parse_mode=ParseMode.HTML)
 
 
 # КОМАНДЫ
-@dp.message_handler(commands=['list'])
+@dp.message(Command('list'))
 async def check_list(message: types.Message):
     user_id = du.get_user_id(int(message.chat.id))
 
@@ -88,7 +88,7 @@ async def check_list(message: types.Message):
         await message.answer("Для отображения событий вы должны прислать ical-ссылку на календарь!")
 
 
-@dp.message_handler(commands=['notif'])
+@dp.message(Command('notif'))
 async def notif_up(message: types.Message):
     user_id = du.get_user_id(int(message.chat.id))
 
@@ -103,7 +103,7 @@ async def notif_up(message: types.Message):
         await message.answer("Для взаимодействия с событиями вы должны прислать ical-ссылку на календарь!")
 
 
-@dp.message_handler(commands=['daily'])
+@dp.message(Command('daily'))
 async def daily_up(message: types.Message):
     user_id = du.get_user_id(int(message.chat.id))
 
@@ -118,7 +118,7 @@ async def daily_up(message: types.Message):
         await message.answer("Для взаимодействия с событиями вы должны прислать ical-ссылку на календарь!")
 
 
-@dp.message_handler(commands=['moment'])
+@dp.message(Command('moment'))
 async def start_up(message: types.Message):
     user_id = du.get_user_id(int(message.chat.id))
 
@@ -133,7 +133,7 @@ async def start_up(message: types.Message):
         await message.answer("Для взаимодействия с событиями вы должны прислать ical-ссылку на календарь!")
 
 
-@dp.message_handler(commands=['get_alarm'])
+@dp.message(Command('get_alarm'))
 async def start_up(message: types.Message):
     user_id = du.get_user_id(int(message.chat.id))
 
@@ -161,7 +161,7 @@ async def start_up(message: types.Message):
         await message.answer("Для того, чтобы получить таймеры, вы должны прислать ical-ссылку на свой календарь!")
 
 
-@dp.message_handler(commands=['edit_alarm'])
+@dp.message(Command('edit_alarm'))
 async def start_up(message: types.Message):
     user_id = du.get_user_id(int(message.chat.id))
 
@@ -174,7 +174,7 @@ async def start_up(message: types.Message):
         await message.answer("Для того, чтобы изменить таймеры, вы должны прислать ical-ссылку на свой календарь!")
 
 
-@dp.message_handler(commands=['stop_alarm'])
+@dp.message(Command('stop_alarm'))
 async def daily_up(message: types.Message):
     user_id = du.get_user_id(int(message.chat.id))
 
@@ -190,7 +190,7 @@ async def daily_up(message: types.Message):
 
 
 # ЗАГРУЗКА ССЫЛКИ
-@dp.message_handler(content_types=['text'])
+@dp.message(F.text)
 async def downloading_file_ics(message: types.Message):
     user_id = du.get_user_id(int(message.chat.id))
 
@@ -314,8 +314,13 @@ async def update(wait_for):
                     os.rename(f'../data/icals/{str(user_id)}_new.ics', f'../data/icals/{str(user_id)}.ics')
 
 
+async def main():
+    # Создаем задачи для фоновых процессов
+    asyncio.create_task(alarm(60))  # ПРОВЕРКА КАЖДУЮ 1 МИНУТУ
+    asyncio.create_task(update(780))  # ПРОВЕРКА КАЖДУЮ 13 МИНУТУ
+    
+    # Запускаем бота
+    await dp.start_polling(bot, skip_updates=True)
+
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.create_task(alarm(60))  # ПРОВЕРКА КАЖДУЮ 1 МИНУТУ
-    loop.create_task(update(780))  # ПРОВЕРКА КАЖДУЮ 13 МИНУТУ
-    executor.start_polling(dp, skip_updates=True)
+    asyncio.run(main())

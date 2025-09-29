@@ -1,0 +1,37 @@
+services:
+  calendarkin-bot:
+    build: .
+    container_name: y-calendarkin-bot
+    restart: unless-stopped
+    environment:
+      # Токен Telegram бота (обязательно)
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+
+      # Дополнительные переменные окружения (опционально)
+      - TZ=Europe/Moscow
+
+    volumes:
+      # Монтируем директорию с базами данных для сохранения данных
+      - ./db:/app/db
+      # Монтируем директорию с календарями
+      - ./data:/app/data
+
+    # Логирование
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Ограничения ресурсов
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+# Создаем именованные тома для данных (опционально)
+volumes:
+  db_data:
+  ical_data:
